@@ -1,10 +1,11 @@
 import 'reflect-metadata';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../app.module';
 import { CLOCK, type Clock } from '../common/clock';
 import { appOptions, configureApp, createAdapter } from '../common/http';
+import { generateApiKey } from '../auth/api-keys';
 import { Database, runMigrations } from '../db/database';
 
 // Test helpers for HTTP tests against a real PostgreSQL (DATABASE_URL). Never used by the app.
@@ -69,12 +70,11 @@ export async function resetAndSeed(db: Database, options: SeedOptions = {}): Pro
     options.permissions ?? ['events.ingest'],
   ]);
   await db.pool.query('INSERT INTO service_account_sources VALUES ($1, $2)', [accountId, sourceId]);
-  const prefix = 'fixture';
-  const secret = randomUUID();
+  const { key, prefix, secretSha256 } = generateApiKey();
   await db.pool.query(
     `INSERT INTO api_keys (id, service_account_id, prefix, secret_sha256, expires_at)
      VALUES ($1, $2, $3, $4, now() + interval '90 days')`,
-    [randomUUID(), accountId, prefix, createHash('sha256').update(secret).digest()],
+    [randomUUID(), accountId, prefix, secretSha256],
   );
-  return { sourceId, apiKey: `iomp_${prefix}_${secret}` };
+  return { sourceId, apiKey: key };
 }

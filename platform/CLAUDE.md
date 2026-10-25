@@ -11,6 +11,7 @@ Spec: `docs/specs/technical-specification.md` (IDs `FR-*`, `NFR-*`, `TEST-*`, `A
 - Never import from `agent/`. Generate DTOs from `contracts/openapi/` inside `platform/`.
 - Dependency manifests and lock files live under `platform/`, not the repo root.
 - Stack: ADR-PL-001 (NestJS/Fastify API and workers, PostgreSQL, React/Vite SPA, pnpm workspace); database access, migrations and ingest persistence: ADR-PL-002. New infrastructure gets its own ADR first.
+- Admin CLI until IAM exists (#31), from `platform/` after `pnpm build`, with `DATABASE_URL`: `pnpm -s admin create-source --name <n> --type <t>`, `pnpm -s admin create-account --name <n> --permissions events.ingest --sources <id>`, `pnpm -s admin create-key --account <id>` (prints the key once), `pnpm -s admin revoke-key --prefix <p>`.
 - Database tests need `DATABASE_URL` (PostgreSQL 16); without it they are skipped locally, CI always runs them. Migrations live in `apps/api/src/db/migrations.ts`; never edit an applied one.
 - Commands, from `platform/`: `pnpm install`, `pnpm gen:api-types` (after any contract change), `pnpm typecheck`, `pnpm build`, `pnpm test`. Dev: `pnpm --filter @iomp/api build && pnpm --filter @iomp/api start`, `pnpm --filter @iomp/web dev`.
 - Public API types come only from `@iomp/api-types` (generated, git-ignored). Never hand-write DTOs for `/api/v1`.
