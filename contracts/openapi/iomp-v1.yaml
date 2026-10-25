@@ -1,0 +1,1252 @@
+openapi: 3.1.0
+info:
+  title: IOMP public API v1 (agent-facing subset)
+  version: 0.1.0
+  summary: The part of the IOMP /api/v1 surface that the IOMP Agent uses.
+  description: |
+    Contract v0. Source: platform spec 8.1 (general contract) and 8.2 (minimal endpoints),
+    field rules from 4.1-4.4. Open questions from the agent spec 8.6 (GAP-AG-001..008)
+    are answered in `docs/adr/ADR-CT-001-agent-integration-gaps.md` and reflected here.
+
+    General rules (platform spec 8.1):
+
+    - JSON UTF-8, `application/json`; PATCH bodies are JSON Merge Patch (`application/merge-patch+json`).
+    - POST create/commands require `Idempotency-Key` (16-128 printable ASCII), TTL 7 days,
+      scoped by principal + method + URI. The same key with the same body returns the first
+      response; the same key with a different body returns 409 `IDEMPOTENCY_CONFLICT`.
+    - PATCH requires `If-Match` with the resource ETag. No header returns 428, a stale ETag 412.
+      The ETag is the resource `version` as a quoted string, for example `"7"`.
+    - Errors are `application/problem+json` (RFC 9457) with the extensions `code`, `request_id`, `errors[]`.
+    - v1 accepts additive changes only; breaking changes go to `/api/v2`.
+    - Clients must ignore unknown response fields.
+
+    Metrics, logs and traces do not go through this API: see `contracts/otlp-profile.yaml`.
+  license:
+    name: Proprietary (diploma project)
+    identifier: LicenseRef-IOMP
+servers:
+  - url: https://{host}
+    description: IOMP API gateway
+    variables:
+      host:
+        default: iomp.example.com
+security:
+  - apiKey: []
+tags:
+  - name: events
+    description: Event ingestion
+  - name: cis
+    description: Configuration items (inventory)
+  - name: topology
+    description: Relationships between configuration items
+
+paths:
+  /api/v1/events:ingest:
+    post:
+      tags: [events]
+      operationId: ingestEvents
+      summary: Ingest a batch of events from one source
+      description: |
+        Permission `events.ingest`. The credential must be bound to `source_id` (403 `SOURCE_MISMATCH` otherwise).
+
+        Limits: at most 500 events and 5 MiB decoded body per batch, 256 KiB per event,
+        decompression ratio at most 20:1.
+
+        202 is returned only after the batch is durably accepted. The receipt has one item per
+        input event, in input order (`index`). Items with `status=Accepted` or `Duplicate` are
+        confirmed and must not be resent. Items with `status=Rejected` carry `error.retryable`:
+        `false` means a permanent reject (fix the input, do not resend), `true` means the client may
+        resend that event later in a new batch with a new `Idempotency-Key`.
+
+        Delivery dedup key is `source_id + source_event_id (+ source_revision when present)`,
+        kept for at least 7 days. A repeat returns `Duplicate` with the original `event_id`.
+
+        A malformed envelope (bad JSON, wrong `schema_version`, missing `events`) rejects the whole
+        batch with 422 and nothing is accepted.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+            examples:
+              opening:
+                $ref: '#/components/examples/IngestOpening'
+      responses:
+        '202':
+          description: Batch accepted. Per-item receipts, possibly with rejected items.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestReceipt'
+              examples:
+                full:
+                  $ref: '#/components/examples/ReceiptFull'
+                partial:
+                  $ref: '#/components/examples/ReceiptPartial'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/v1/cis:
+    get:
+      tags: [cis]
+      operationId: listCis
+      summary: List configuration items
+      description: |
+        Permission `data.read`; results are limited to the caller's scope.
+
+        Exact identity lookup for a discovered resource: `data_source_id` + `source_object_id`.
+        Identity `(data_source_id, source_object_id)` is unique, so this returns at most one item.
+        Each item carries `version`; use it as `If-Match: "<version>"` for PATCH.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: sort
+          in: query
+          description: Comma-separated fields, `-` for descending. Allowed fields are `name`, `updated_at`, `id`.
+          schema:
+            type: string
+            default: name,id
+        - name: q
+          in: query
+          description: Free-text search over name and DNS names.
+          schema:
+            type: string
+            maxLength: 512
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/CIType'
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: owner_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: ip
+          in: query
+          description: Exact IPv4 or IPv6 address.
+          schema:
+            type: string
+        - name: data_source_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: source_object_id
+          in: query
+          description: Only together with `data_source_id`; 422 otherwise.
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        '200':
+          description: A page of configuration items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CIList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      tags: [cis]
+      operationId: createCi
+      summary: Create a configuration item
+      description: |
+        Permission `ci.write`. A service account may create CIs only with its own `data_source_id`,
+        and only with `lifecycle_status=Proposed` (the default). Business fields (`owner_id`,
+        `support_group_id`, `criticality`, `location_id`) are set by people, not by sources.
+
+        409 `CI_IDENTITY_CONFLICT` when a CI with the same `(data_source_id, source_object_id)` exists;
+        the problem body has `existing_id`. Reconcile with that CI instead of creating another one.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CICreate'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CI'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/v1/cis/{id}:
+    patch:
+      tags: [cis]
+      operationId: patchCi
+      summary: Update observed fields of a configuration item
+      description: |
+        Permission `ci.write`. JSON Merge Patch over the allowlisted fields in `CIPatch`.
+        Server fields (`id`, `version`, timestamps) cannot be written. A service account may patch
+        only CIs of its own `data_source_id`; a manually locked field returns 403 `FIELD_LOCKED`.
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/CIPatch'
+      responses:
+        '200':
+          description: Updated.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CI'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/v1/topology/relationships:
+    post:
+      tags: [topology]
+      operationId: createRelationship
+      summary: Propose a relationship between two configuration items
+      description: |
+        Permission `topology.write`. The request has no `status`: every relationship created
+        through this endpoint starts as `Proposed`. Only a person confirms or rejects it.
+
+        409 `RELATIONSHIP_EXISTS` when an active edge with the same canonical key
+        `(from_ci_id, to_ci_id, type)` exists; the problem body has `existing_id`. A `Rejected` edge
+        is not recreated unless the evidence is new (platform spec FR-TOPOLOGY-002).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipCreate'
+      responses:
+        '201':
+          description: Created with `status=Proposed`.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Relationship'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/v1/topology/relationships/{id}:
+    patch:
+      tags: [topology]
+      operationId: patchRelationship
+      summary: Update a relationship
+      description: |
+        Permission `topology.write`. People may change `status` (Confirmed/Rejected/Expired) with
+        a `reason`. A service account may change only `confidence`, `evidence` and `observed_at`
+        on edges of its own source; any other field returns 403 `FIELD_NOT_WRITABLE`.
+        A person's Confirmed/Rejected decision is never reverted by a source refresh.
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/RelationshipPatch'
+      responses:
+        '200':
+          description: Updated.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Relationship'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Service account API key, issued once by `POST /api/v1/api-keys` (format `iomp_<prefix>_<secret>`,
+        expiry at most 90 days). The key belongs to a service account bound to one or more data sources;
+        `source_id` in a request must be one of them. TLS is required; mTLS is a deployment option
+        and does not replace the key. See ADR-CT-001, GAP-AG-001.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 16-128 printable ASCII characters. Persist it before sending; reuse it only with identical bytes.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+        pattern: '^[\x21-\x7E]+$'
+      example: ag-batch-0b6f4f8e-3f0a-4d43-9a57-1b8f6a0d2c11
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current resource ETag, the quoted `version`. Missing returns 428, stale returns 412.
+      schema:
+        type: string
+      example: '"7"'
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      description: UUID. Echoed back; replaced by the server if missing or invalid.
+      schema:
+        type: string
+        format: uuid
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from `next_cursor`, valid 15 minutes. Invalid or expired returns 400 `INVALID_CURSOR`.
+      schema:
+        type: string
+
+  headers:
+    CorrelationId:
+      description: Correlation ID of this request.
+      schema:
+        type: string
+        format: uuid
+    ETag:
+      description: Quoted resource version, for `If-Match`.
+      schema:
+        type: string
+      example: '"1"'
+    Location:
+      description: URI of the created resource.
+      schema:
+        type: string
+        format: uri-reference
+    RetryAfter:
+      description: Seconds to wait, or an HTTP-date.
+      schema:
+        type: string
+      example: '30'
+
+  responses:
+    BadRequest:
+      description: Syntax error or invalid cursor.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing, invalid, expired or revoked credential.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: |
+        Missing permission, `SOURCE_MISMATCH` (credential not bound to `source_id`),
+        `FIELD_NOT_WRITABLE` or `FIELD_LOCKED`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource absent or outside the caller's scope.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: |
+        `IDEMPOTENCY_CONFLICT` (same key, different body), `CI_IDENTITY_CONFLICT` or
+        `RELATIONSHIP_EXISTS` (with `existing_id`). Do not retry with a new key blindly.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            idempotency:
+              $ref: '#/components/examples/ProblemIdempotencyConflict'
+    PreconditionFailed:
+      description: '`If-Match` does not match the current version.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PayloadTooLarge:
+      description: Batch over 500 events or 5 MiB, or decompression ratio over 20:1. Nothing is accepted.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnsupportedMediaType:
+      description: Wrong `Content-Type` or `Content-Encoding`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntity:
+      description: Schema validation failed. For ingest, the envelope is invalid and nothing is accepted.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PreconditionRequired:
+      description: '`If-Match` is missing.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Quota exceeded. Nothing is accepted; retry the same request after `Retry-After`.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ServiceUnavailable:
+      description: A dependency is unavailable. Nothing is accepted; retry the same request with backoff.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    Severity:
+      type: string
+      enum: [Critical, High, Medium, Low, Info, Unknown]
+    EventStatus:
+      type: string
+      description: Recovery is `Cleared`, not a separate severity or event type.
+      enum: [Active, Cleared, Unknown]
+    Category:
+      type: string
+      enum: [availability, performance, capacity, security, configuration, connectivity, data_quality, unknown]
+    Labels:
+      type: object
+      maxProperties: 64
+      propertyNames:
+        minLength: 1
+        maxLength: 128
+      additionalProperties:
+        type: string
+        maxLength: 1024
+
+    IngestRequest:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_id, events]
+      properties:
+        schema_version:
+          type: string
+          description: Major.minor. Major `1` only; an unknown minor is accepted.
+          pattern: '^1\.[0-9]+$'
+          examples: ['1.0']
+        source_id:
+          type: string
+          format: uuid
+          description: Data source registered in IOMP and bound to the credential.
+        events:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/InputEvent'
+
+    InputEvent:
+      type: object
+      description: |
+        An input event as the source sends it, not the normalized server projection.
+        Server-only fields (`event_id`, `fingerprint`, `ingestion_timestamp`, lifecycle and ack state)
+        are never sent. At most 256 KiB per event.
+      additionalProperties: false
+      required: [source_event_id, timestamp, event_type, severity, status, title, message, labels]
+      properties:
+        source_event_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: |
+            Unique per source and per fact. Opening and recovery of one condition have different
+            `source_event_id` values. Stable across retries.
+        source_revision:
+          type: string
+          maxLength: 64
+          description: Optional native revision; part of the dedup key when present.
+        timestamp:
+          type: string
+          format: date-time
+          description: |
+            RFC 3339 with offset. More than 5 minutes in the future is rejected per item
+            (`TIMESTAMP_IN_FUTURE`); older than 24 hours is stored as late, without reopening.
+        event_type:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$'
+          description: Registered in `contracts/event-types.yaml`. The same for opening and recovery of one condition.
+        severity:
+          $ref: '#/components/schemas/Severity'
+        status:
+          $ref: '#/components/schemas/EventStatus'
+        source_object_id:
+          type: string
+          maxLength: 256
+          description: Stable external ID of the resource the event is about. Used for CI matching and the fingerprint.
+        condition_id:
+          type: string
+          maxLength: 256
+          description: Stable ID of the health condition. Required for `Active`/`Cleared` condition events.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 512
+        message:
+          type: string
+          maxLength: 32768
+          description: May be empty. At most 32 KiB.
+        labels:
+          $ref: '#/components/schemas/Labels'
+        category:
+          $ref: '#/components/schemas/Category'
+        hostname:
+          type: string
+          maxLength: 253
+        ip_address:
+          type: string
+          maxLength: 45
+        service_name:
+          type: string
+          maxLength: 256
+        application_name:
+          type: string
+          maxLength: 256
+        environment:
+          type: string
+          maxLength: 64
+        location:
+          type: string
+          maxLength: 256
+        metric_name:
+          type: string
+          maxLength: 256
+        metric_value:
+          type: number
+        metric_unit:
+          type: string
+          maxLength: 32
+        threshold:
+          type: object
+          additionalProperties: false
+          required: [operator, value]
+          properties:
+            operator:
+              type: string
+              enum: [gt, gte, lt, lte, eq, ne]
+            value:
+              type: number
+            duration_seconds:
+              type: integer
+              minimum: 0
+        trace_id:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+        span_id:
+          type: string
+          pattern: '^[0-9a-f]{16}$'
+        source_sequence:
+          type: integer
+          minimum: 0
+
+    IngestReceipt:
+      type: object
+      required: [receipt_id, accepted_count, rejected_count, items, ingestion_timestamp]
+      description: |
+        Invariants: `items` has exactly one entry per input event, ordered by `index`;
+        `accepted_count` = items with status `Accepted` or `Duplicate`;
+        `rejected_count` = items with status `Rejected`; the two add up to the number of input events.
+        A receipt that breaks an invariant must be treated by the client as an uncertain delivery.
+      properties:
+        receipt_id:
+          type: string
+          format: uuid
+        accepted_count:
+          type: integer
+          minimum: 0
+        rejected_count:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptItem'
+        ingestion_timestamp:
+          type: string
+          format: date-time
+
+    ReceiptItem:
+      type: object
+      required: [index, source_event_id, status]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          description: Position of the event in the request `events` array.
+        source_event_id:
+          type: string
+        status:
+          type: string
+          enum: [Accepted, Duplicate, Rejected]
+          description: |
+            `Accepted` - new event stored. `Duplicate` - already stored earlier (dedup key hit);
+            `event_id` is the original one. Both are terminal. `Rejected` - see `error`.
+        event_id:
+          type: string
+          format: uuid
+          description: Present for `Accepted` and `Duplicate`.
+        error:
+          $ref: '#/components/schemas/ItemError'
+      allOf:
+        - if:
+            properties:
+              status:
+                enum: [Accepted, Duplicate]
+          then:
+            required: [event_id]
+        - if:
+            properties:
+              status:
+                const: Rejected
+          then:
+            required: [error]
+
+    ItemError:
+      type: object
+      required: [code, retryable]
+      properties:
+        code:
+          type: string
+          description: |
+            Permanent (`retryable=false`): `INVALID_FIELD`, `EVENT_TOO_LARGE`, `TIMESTAMP_IN_FUTURE`,
+            `UNKNOWN_EVENT_TYPE`, `DUPLICATE_IN_BATCH`.
+            Transient (`retryable=true`): `SOURCE_QUOTA_EXCEEDED`, `TEMPORARILY_UNAVAILABLE`.
+            New codes may be added; an unknown code with `retryable=false` is permanent.
+          examples: [INVALID_FIELD]
+        retryable:
+          type: boolean
+        field:
+          type: string
+          description: JSON pointer inside the event, for example `/labels`.
+        detail:
+          type: string
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details with IOMP extensions. Never contains stack traces or secrets.
+      required: [type, title, status, code, request_id]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          examples: ['urn:iomp:problem:idempotency-conflict']
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+          examples: [IDEMPOTENCY_CONFLICT]
+        request_id:
+          type: string
+          format: uuid
+        errors:
+          type: array
+          items:
+            type: object
+            required: [code]
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              detail:
+                type: string
+        existing_id:
+          type: string
+          format: uuid
+          description: For `CI_IDENTITY_CONFLICT` and `RELATIONSHIP_EXISTS`.
+        retry_after_seconds:
+          type: integer
+          description: For 429 and 503, same value as `Retry-After`.
+
+    CIType:
+      type: string
+      enum:
+        - host
+        - virtual_machine
+        - container
+        - pod
+        - service
+        - application
+        - database
+        - network_device
+        - firewall
+        - switch
+        - router
+        - load_balancer
+        - storage
+        - cluster
+        - namespace
+        - queue
+        - external_endpoint
+        - network_segment
+        - business_service
+        - vpn_gateway
+        - web_server
+        - middleware
+        - cloud_resource
+        - log_source
+        - communication_link
+        - organization_unit
+        - location
+    LifecycleStatus:
+      type: string
+      enum: [Proposed, Active, Retired, Archived]
+
+    CI:
+      type: object
+      required: [id, type, name, lifecycle_status, version, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/CIType'
+        name:
+          type: string
+        lifecycle_status:
+          $ref: '#/components/schemas/LifecycleStatus'
+        version:
+          type: integer
+          minimum: 1
+          description: Optimistic version. The ETag is this value in quotes.
+        owner_id:
+          type: [string, 'null']
+        support_group_id:
+          type: [string, 'null']
+        criticality:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 5
+        environment:
+          type: [string, 'null']
+        location_id:
+          type: [string, 'null']
+        ip_addresses:
+          type: array
+          items:
+            type: string
+        dns_names:
+          type: array
+          items:
+            type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        data_source_id:
+          type: [string, 'null']
+          format: uuid
+        source_object_id:
+          type: [string, 'null']
+        last_synced_at:
+          type: [string, 'null']
+          format: date-time
+        technical_attributes:
+          type: object
+        schema_version:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+
+    CIList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CI'
+        next_cursor:
+          type: [string, 'null']
+
+    CICreate:
+      type: object
+      additionalProperties: false
+      required: [type, name]
+      properties:
+        type:
+          $ref: '#/components/schemas/CIType'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        lifecycle_status:
+          $ref: '#/components/schemas/LifecycleStatus'
+          default: Proposed
+        data_source_id:
+          type: string
+          format: uuid
+          description: Required for discovered CIs; must be bound to the credential.
+        source_object_id:
+          type: string
+          maxLength: 256
+          description: Required with `data_source_id`.
+        environment:
+          type: string
+          maxLength: 64
+        ip_addresses:
+          type: array
+          items:
+            type: string
+        dns_names:
+          type: array
+          items:
+            type: string
+            description: Lowercase FQDN without trailing dot.
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        technical_attributes:
+          type: object
+          description: Typed by CIType schema; unknown fields go to `technical_attributes.extensions`.
+        schema_version:
+          type: string
+          default: '1.0'
+        owner_id:
+          type: string
+          format: uuid
+          description: People only. A service account sending it gets 403 `FIELD_NOT_WRITABLE`.
+        support_group_id:
+          type: string
+          format: uuid
+          description: People only.
+        criticality:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: People only.
+        location_id:
+          type: string
+          format: uuid
+          description: People only.
+
+    CIPatch:
+      type: object
+      additionalProperties: false
+      description: |
+        Merge patch. Fields a source (service account) may write: `name`, `ip_addresses`,
+        `dns_names`, `tags`, `technical_attributes`, `last_synced_at`. The rest are for people.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        ip_addresses:
+          type: array
+          items:
+            type: string
+        dns_names:
+          type: array
+          items:
+            type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: [string, 'null']
+        technical_attributes:
+          type: object
+        last_synced_at:
+          type: string
+          format: date-time
+        lifecycle_status:
+          $ref: '#/components/schemas/LifecycleStatus'
+        environment:
+          type: [string, 'null']
+        owner_id:
+          type: [string, 'null']
+          format: uuid
+        support_group_id:
+          type: [string, 'null']
+          format: uuid
+        criticality:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 5
+        location_id:
+          type: [string, 'null']
+          format: uuid
+
+    RelationshipType:
+      type: string
+      description: Semantics and propagation in platform spec 4.3. `A depends_on B` means A consumes B.
+      enum:
+        - depends_on
+        - hosts
+        - runs_on
+        - connects_to
+        - uses
+        - routes_through
+        - monitors
+        - managed_by
+        - owned_by
+        - replicates_to
+        - backs_up
+        - serves
+        - exposes
+        - belongs_to
+        - located_in
+        - member_of
+    RelationshipStatus:
+      type: string
+      enum: [Proposed, Confirmed, Rejected, Expired]
+    Evidence:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          description: How the edge was observed, for example `process_connection`, `kubernetes_owner`, `config_file`, `trace`.
+        ref:
+          type: string
+          maxLength: 1024
+        observed_at:
+          type: string
+          format: date-time
+        details:
+          type: object
+
+    Relationship:
+      type: object
+      required: [id, from_ci_id, to_ci_id, type, direction, status, confidence, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        from_ci_id:
+          type: string
+          format: uuid
+        to_ci_id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/RelationshipType'
+        direction:
+          type: string
+          enum: [directed, undirected]
+        status:
+          $ref: '#/components/schemas/RelationshipStatus'
+        weight:
+          type: number
+          minimum: 0
+          maximum: 1
+        criticality:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 5
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        propagates_failure:
+          type: boolean
+        source_id:
+          type: [string, 'null']
+          format: uuid
+        evidence:
+          $ref: '#/components/schemas/Evidence'
+        evidence_ref:
+          type: [string, 'null']
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+        observed_at:
+          type: [string, 'null']
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+        author:
+          type: string
+
+    RelationshipCreate:
+      type: object
+      additionalProperties: false
+      required: [from_ci_id, to_ci_id, type, direction, evidence, confidence]
+      properties:
+        from_ci_id:
+          type: string
+          format: uuid
+        to_ci_id:
+          type: string
+          format: uuid
+          description: Must differ from `from_ci_id`.
+        type:
+          $ref: '#/components/schemas/RelationshipType'
+        direction:
+          type: string
+          enum: [directed, undirected]
+          description: '`undirected` only for `connects_to`.'
+        evidence:
+          $ref: '#/components/schemas/Evidence'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    RelationshipPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [Confirmed, Rejected, Expired]
+          description: People only.
+        reason:
+          type: string
+          maxLength: 1024
+          description: Required with `status`.
+        weight:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: People only.
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        evidence:
+          $ref: '#/components/schemas/Evidence'
+        observed_at:
+          type: string
+          format: date-time
+
+  examples:
+    IngestOpening:
+      summary: Health condition opened
+      value:
+        schema_version: '1.0'
+        source_id: 6a79fd19-cdb1-4e2e-ae99-a9e8477d5001
+        events:
+          - source_event_id: 'db-check-341:opened:1'
+            timestamp: '2026-09-24T09:15:00Z'
+            event_type: health_check.failed
+            severity: High
+            status: Active
+            source_object_id: database-prod-01
+            condition_id: tcp-5432-unreachable
+            title: Database does not answer the TCP probe
+            message: Three consecutive checks timed out
+            labels:
+              environment: production
+              service: orders
+    ReceiptFull:
+      summary: All events accepted
+      value:
+        receipt_id: 31f00c59-03f6-4d94-b2ba-b49894f56900
+        accepted_count: 1
+        rejected_count: 0
+        items:
+          - index: 0
+            source_event_id: 'db-check-341:opened:1'
+            event_id: 1a823350-7986-4345-a6ac-c05bedcd9600
+            status: Accepted
+        ingestion_timestamp: '2026-09-24T09:15:00.214Z'
+    ReceiptPartial:
+      summary: One accepted, one duplicate, one rejected
+      value:
+        receipt_id: 7c1d1f9e-58c4-4b0e-8f39-2a1f0e6b9a10
+        accepted_count: 2
+        rejected_count: 1
+        items:
+          - index: 0
+            source_event_id: 'orders-health:cycle-41:opened:1'
+            event_id: 9b2e7c4a-1d3f-4e5a-8b6c-7d8e9f0a1b2c
+            status: Accepted
+          - index: 1
+            source_event_id: 'db-check-341:opened:1'
+            event_id: 1a823350-7986-4345-a6ac-c05bedcd9600
+            status: Duplicate
+          - index: 2
+            source_event_id: 'disk-free:cycle-7:opened:1'
+            status: Rejected
+            error:
+              code: TIMESTAMP_IN_FUTURE
+              retryable: false
+              field: /timestamp
+              detail: Timestamp is more than 5 minutes ahead of the server clock
+        ingestion_timestamp: '2026-09-24T09:15:01.020Z'
+    ProblemIdempotencyConflict:
+      summary: Same Idempotency-Key, different body
+      value:
+        type: 'urn:iomp:problem:idempotency-conflict'
+        title: Idempotency key reused with a different body
+        status: 409
+        detail: The key was first used with a different payload hash
+        instance: '/api/v1/events:ingest'
+        code: IDEMPOTENCY_CONFLICT
+        request_id: 33e965ba-4c86-45a1-aebf-933f17716001

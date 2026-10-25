@@ -1,0 +1,49 @@
+{
+  "description": "The Idempotency-Key of 202-full is reused with a different body. Nothing is accepted. The client quarantines the request and does not retry with a new key.",
+  "precondition": "202-full was sent first with the same Idempotency-Key",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/events:ingest",
+    "headers": {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "ag-batch-0b6f4f8e-3f0a-4d43-9a57-1b8f6a0d2c11",
+      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a11"
+    },
+    "body": {
+      "schema_version": "1.0",
+      "source_id": "6a79fd19-cdb1-4e2e-ae99-a9e8477d5001",
+      "events": [
+        {
+          "source_event_id": "orders-health:cycle-41:opened:1",
+          "timestamp": "2026-09-24T09:15:00Z",
+          "event_type": "health_check.failed",
+          "severity": "High",
+          "status": "Active",
+          "source_object_id": "orders-prod-01",
+          "condition_id": "orders-readiness",
+          "title": "Service failed the availability check",
+          "message": "Different text",
+          "labels": {
+            "environment": "production",
+            "service": "orders"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 409,
+    "headers": {
+      "Content-Type": "application/problem+json"
+    },
+    "body": {
+      "type": "urn:iomp:problem:idempotency-conflict",
+      "title": "Idempotency key reused with a different body",
+      "status": 409,
+      "detail": "The key was first used with a different payload hash",
+      "instance": "/api/v1/events:ingest",
+      "code": "IDEMPOTENCY_CONFLICT",
+      "request_id": "33e965ba-4c86-45a1-aebf-933f17716001"
+    }
+  }
+}

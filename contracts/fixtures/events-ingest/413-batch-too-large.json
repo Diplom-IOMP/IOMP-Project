@@ -1,0 +1,36 @@
+{
+  "description": "501 events in one batch (also returned above 5 MiB decoded). Nothing is accepted. The client splits the batch, with new keys per sub-batch.",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/events:ingest",
+    "headers": {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "ag-batch-0b6f4f8e-3f0a-4d43-9a57-1b8f6a0d2c11",
+      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a11"
+    },
+    "body_generator": "events = 501 copies of 202-full events[0] with source_event_id suffixed :0..:500",
+    "body": null
+  },
+  "response": {
+    "status": 413,
+    "headers": {
+      "Content-Type": "application/problem+json"
+    },
+    "body": {
+      "type": "urn:iomp:problem:batch-too-large",
+      "title": "Batch exceeds limits",
+      "status": 413,
+      "detail": "At most 500 events and 5 MiB per batch",
+      "instance": "/api/v1/events:ingest",
+      "code": "BATCH_TOO_LARGE",
+      "request_id": "33e965ba-4c86-45a1-aebf-933f17716001",
+      "errors": [
+        {
+          "field": "/events",
+          "code": "MAX_ITEMS",
+          "detail": "501 > 500"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,46 @@
+# OTLP ingestion profile of IOMP, v0.
+# Answers GAP-AG-004 (see docs/adr/ADR-CT-001-agent-integration-gaps.md).
+# Metrics, logs and traces go here, never through /api/v1.
+
+profile_version: 0.1.0
+protocol: otlp
+otlp_spec_version: 1.3.2
+transport: http
+encoding: protobuf            # application/x-protobuf; JSON encoding is not accepted in v0
+compression: [gzip, none]     # Content-Encoding: gzip recommended
+
+# Signal URLs are relative to base_url. The base URL is not under /api/v1.
+base_url: https://{host}/otlp
+signals:
+  metrics: /v1/metrics        # ExportMetricsServiceRequest
+  logs: /v1/logs              # ExportLogsServiceRequest
+  traces: /v1/traces          # ExportTraceServiceRequest
+# Same gateway also listens on private port 4318 for allowlisted source networks
+# (platform spec 6.4); the path layout there is identical.
+grpc: not_supported_in_v0
+
+auth:
+  # Same credential as the REST API: a service account API key bound to one data source.
+  header: X-API-Key
+  source_binding: >-
+    The source is taken from the key's binding. Resource attributes in the payload
+    (service.name, host.name, iomp.source_id, ...) never override it. A key bound to
+    several sources is rejected on OTLP routes with 403; issue one key per source.
+  mtls: optional              # deployment option, does not replace the key
+
+limits:
+  max_request_bytes_decoded: 5242880   # 5 MiB
+  max_decompression_ratio: 20
+  max_labels_per_series: 30
+  export_interval_seconds: 5           # recommended client batching interval
+
+responses:
+  success: >-
+    HTTP 200 with Export*ServiceResponse. If partial_success is set, rejected_* counts and
+    error_message are informational; the request is terminal and must not be resent.
+  retryable: [429, 502, 503, 504]      # honour Retry-After; exponential backoff 1-60 s with full jitter
+  permanent: [400, 401, 403, 404, 413, 415]
+  notes: >-
+    401 pauses the source until the credential is replaced. 413 means the request must be split.
+    OTLP has no per-item receipt and no Idempotency-Key: a retry after an uncertain transport
+    failure may create duplicates. Exactly-once is not promised for OTLP signals.

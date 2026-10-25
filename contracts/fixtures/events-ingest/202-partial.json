@@ -1,0 +1,101 @@
+{
+  "description": "Server clock is 2026-09-24T09:15:01Z. Item 0 is new, item 1 was accepted earlier (dedup hit), item 2 is more than 5 minutes in the future and is rejected permanently. The client marks items 0 and 1 delivered and quarantines item 2.",
+  "server_time": "2026-09-24T09:15:01Z",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/events:ingest",
+    "headers": {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "ag-batch-2f0e1d6c-4b5a-4e3f-9a8b-7c6d5e4f3a21",
+      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a11"
+    },
+    "body": {
+      "schema_version": "1.0",
+      "source_id": "6a79fd19-cdb1-4e2e-ae99-a9e8477d5001",
+      "events": [
+        {
+          "source_event_id": "orders-health:cycle-41:opened:1",
+          "timestamp": "2026-09-24T09:15:00Z",
+          "event_type": "health_check.failed",
+          "severity": "High",
+          "status": "Active",
+          "source_object_id": "orders-prod-01",
+          "condition_id": "orders-readiness",
+          "title": "Service failed the availability check",
+          "message": "Three consecutive HTTPS checks timed out",
+          "labels": {
+            "environment": "production",
+            "service": "orders"
+          }
+        },
+        {
+          "source_event_id": "db-check-341:opened:1",
+          "timestamp": "2026-09-24T09:15:00Z",
+          "event_type": "health_check.failed",
+          "severity": "High",
+          "status": "Active",
+          "source_object_id": "database-prod-01",
+          "condition_id": "tcp-5432-unreachable",
+          "title": "Database does not answer the TCP probe",
+          "message": "Three consecutive checks timed out",
+          "labels": {
+            "environment": "production",
+            "service": "orders"
+          }
+        },
+        {
+          "source_event_id": "disk-free:cycle-7:opened:1",
+          "timestamp": "2026-09-24T10:30:00Z",
+          "event_type": "metric_threshold.exceeded",
+          "severity": "Medium",
+          "status": "Active",
+          "source_object_id": "orders-prod-01",
+          "condition_id": "disk-free-root",
+          "title": "Free disk space below threshold",
+          "message": "/ has 4% free",
+          "labels": {
+            "environment": "production",
+            "service": "orders"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 202,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "receipt_id": "7c1d1f9e-58c4-4b0e-8f39-2a1f0e6b9a10",
+      "accepted_count": 2,
+      "rejected_count": 1,
+      "items": [
+        {
+          "index": 0,
+          "source_event_id": "orders-health:cycle-41:opened:1",
+          "event_id": "9b2e7c4a-1d3f-4e5a-8b6c-7d8e9f0a1b2c",
+          "status": "Accepted"
+        },
+        {
+          "index": 1,
+          "source_event_id": "db-check-341:opened:1",
+          "event_id": "1a823350-7986-4345-a6ac-c05bedcd9600",
+          "status": "Duplicate"
+        },
+        {
+          "index": 2,
+          "source_event_id": "disk-free:cycle-7:opened:1",
+          "status": "Rejected",
+          "error": {
+            "code": "TIMESTAMP_IN_FUTURE",
+            "retryable": false,
+            "field": "/timestamp",
+            "detail": "Timestamp is more than 5 minutes ahead of the server clock"
+          }
+        }
+      ],
+      "ingestion_timestamp": "2026-09-24T09:15:01.020Z"
+    }
+  }
+}
