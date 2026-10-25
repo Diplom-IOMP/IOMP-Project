@@ -1,6 +1,6 @@
 # ADR-CT-001: Answers to the agent integration gaps (GAP-AG-001..008)
 
-- Status: Proposed (contract v0)
+- Status: Accepted (contract v0)
 - Deciders: @mutednew (platform), @Rewer2022 (agent)
 - Date: 2026-10-25
 
