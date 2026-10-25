@@ -1,6 +1,6 @@
 # ADR-AG-001: Agent stack
 
-- Status: Proposed
+- Status: Accepted
 - Deciders: @Rewer2022 (agent)
 - Date: 2026-10-25
 - Issue: #16
@@ -52,4 +52,4 @@ Exact package versions are pinned in `Directory.Packages.props` (central package
 - One solution under `agent/` builds every artifact; CI can publish Windows binaries on Linux, but Windows-only collectors are tested on a Windows runner.
 - The GC heap limit is part of the profile config; AG-TEST-040 must confirm Node RSS <= 384 MiB with the full collector mix before release.
 - SQLite WAL with `synchronous=FULL` bounds throughput by fsync per commit, so the receiver batches records per transaction; the Gateway sizing in spec 5.2 must be confirmed by benchmark.
-- The platform side uses Next.js; nothing is shared between them except `contracts/`.
+- The platform uses TypeScript (NestJS API, React/Vite UI, ADR-PL-001); nothing is shared between them except `contracts/`.
