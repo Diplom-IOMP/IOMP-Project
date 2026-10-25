@@ -52,10 +52,24 @@ case "$zones" in
 esac
 
 if [ "$needs_approval" = true ]; then
-  approvers=$(gh api --paginate "repos/$repo/pulls/$pr/reviews" \
-    --jq "[.[] | select(.state == \"APPROVED\" and .user.login != \"$author\")] | length")
+  # Only the right owner can approve, and only their latest review counts: anyone can
+  # review a public repository, and a later "changes requested" withdraws an approval.
+  # agent/platform: that zone's owner. contracts/shared: an owner other than the author.
+  case "$zones:$author" in
+    agent:*)                  approvers_allowed="\"$agent_owner\"" ;;
+    platform:*)               approvers_allowed="\"$platform_owner\"" ;;
+    *:"$agent_owner")         approvers_allowed="\"$platform_owner\"" ;;
+    *:"$platform_owner")      approvers_allowed="\"$agent_owner\"" ;;
+    *)                        approvers_allowed="\"$agent_owner\", \"$platform_owner\"" ;;
+  esac
+  approvers=$(gh api --paginate "repos/$repo/pulls/$pr/reviews" --jq '.[]' |
+    jq -s --argjson allowed "[$approvers_allowed]" '
+      [.[] | select(.state != "COMMENTED" and .state != "PENDING")]
+      | group_by(.user.login) | map(last)
+      | map(select(.state == "APPROVED" and (.user.login as $l | $allowed | index($l))))
+      | length')
   if [ "$approvers" -lt 1 ]; then
-    echo "::error::Changes to the $zones zone by $author need approval from the other owner."
+    echo "::error::Changes to the $zones zone by $author need approval from the other owner ($approvers_allowed)."
     exit 1
   fi
 fi

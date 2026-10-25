@@ -12,7 +12,10 @@ jobs:
   zone-check:
     runs-on: ubuntu-latest
     steps:
+      # Run the script from the base branch: a PR must not be able to rewrite its own gate.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
       - name: Check ownership zones and approvals
         env:
           GH_TOKEN: ${{ github.token }}
