@@ -29,7 +29,7 @@ Rules:
 | `contract/<topic>` | contracts zone | required from the other owner |
 | `repo/<topic>` | shared zone | required from the other owner |
 
-1. One PR touches one zone, and the branch prefix names that zone. `zone-check` in `.github/workflows/contracts.yml` enforces this and the approval rule: `contracts` and `shared` always need the other owner's approval, and so does a change to `agent` or `platform` made by someone other than its owner. The only exception to one zone per PR is a `repo/*` branch (repo-wide maintenance), which may touch every zone but always needs the other owner's approval.
+1. One PR touches one zone, and the branch prefix names that zone. `zone-check` in `.github/workflows/contracts.yml` enforces this and the approval rule (after a review, `zone-recheck.yml` re-runs it): `contracts` and `shared` always need the other owner's approval, and so does a change to `agent` or `platform` made by someone other than its owner. The only exception to one zone per PR is a `repo/*` branch (repo-wide maintenance), which may touch every zone but always needs the other owner's approval.
 2. Squash merge only.
 3. Rebase your own branch on `main` daily and before opening a PR. Never rebase or push to someone else's branch.
 4. Several Claude Code sessions of one person use separate git worktrees and separate branches.

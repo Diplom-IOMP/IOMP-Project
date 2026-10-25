@@ -1,0 +1,36 @@
+name: zone-recheck
+
+# A review does not change the required `zone-check` result: branch rules read the run
+# started by the pull_request event. After an approval is submitted or dismissed,
+# re-run that run so `zone-check` sees the current reviews.
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  rerun-zone-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-run the latest contracts run for the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run_id=$(gh api "repos/$REPO/actions/workflows/contracts.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=1" \
+            --jq '.workflow_runs[0].id // empty')
+          if [ -z "$run_id" ]; then
+            echo "No contracts run for $HEAD_SHA yet; nothing to re-run."
+            exit 0
+          fi
+          status=$(gh api "repos/$REPO/actions/runs/$run_id" --jq '.status')
+          if [ "$status" != completed ]; then
+            echo "Run $run_id is $status; it will read the reviews when it gets there."
+            exit 0
+          fi
+          gh api -X POST "repos/$REPO/actions/runs/$run_id/rerun"
+          echo "Re-ran contracts run $run_id."
