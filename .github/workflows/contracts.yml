@@ -1,0 +1,36 @@
+name: contracts
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  zone-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check ownership zones and approvals
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: .github/scripts/zone-check.sh
+
+  openapi-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint OpenAPI (skipped until a spec exists)
+        run: |
+          if ls contracts/openapi/*.yaml >/dev/null 2>&1; then
+            npx --yes @redocly/cli@1.25.0 lint contracts/openapi/*.yaml
+          else
+            echo "No OpenAPI files yet."
+          fi

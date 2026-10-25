@@ -1,0 +1,53 @@
+{
+  "description": "All events accepted.",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/events:ingest",
+    "headers": {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "ag-batch-0b6f4f8e-3f0a-4d43-9a57-1b8f6a0d2c11",
+      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a11"
+    },
+    "body": {
+      "schema_version": "1.0",
+      "source_id": "6a79fd19-cdb1-4e2e-ae99-a9e8477d5001",
+      "events": [
+        {
+          "source_event_id": "orders-health:cycle-41:opened:1",
+          "timestamp": "2026-09-24T09:15:00Z",
+          "event_type": "health_check.failed",
+          "severity": "High",
+          "status": "Active",
+          "source_object_id": "orders-prod-01",
+          "condition_id": "orders-readiness",
+          "title": "Service failed the availability check",
+          "message": "Three consecutive HTTPS checks timed out",
+          "labels": {
+            "environment": "production",
+            "service": "orders"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 202,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "receipt_id": "31f00c59-03f6-4d94-b2ba-b49894f56900",
+      "accepted_count": 1,
+      "rejected_count": 0,
+      "items": [
+        {
+          "index": 0,
+          "source_event_id": "orders-health:cycle-41:opened:1",
+          "event_id": "1a823350-7986-4345-a6ac-c05bedcd9600",
+          "status": "Accepted"
+        }
+      ],
+      "ingestion_timestamp": "2026-09-24T09:15:00.214Z"
+    }
+  }
+}
