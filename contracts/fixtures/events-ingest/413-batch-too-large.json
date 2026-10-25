@@ -1,14 +1,15 @@
 {
   "description": "501 events in one batch (also returned above 5 MiB decoded). Nothing is accepted. The client splits the batch, with new keys per sub-batch.",
+  "preconditions": [],
   "request": {
     "method": "POST",
     "path": "/api/v1/events:ingest",
     "headers": {
       "Content-Type": "application/json",
-      "Idempotency-Key": "ag-batch-0b6f4f8e-3f0a-4d43-9a57-1b8f6a0d2c11",
-      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a11"
+      "Idempotency-Key": "ag-batch-8d3f5a27-6c1e-4b90-9f4a-3e5b7c9d1f55",
+      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a14"
     },
-    "body_generator": "events = 501 copies of 202-full events[0] with source_event_id suffixed :0..:500",
+    "body_generator": "events = 501 copies of 202-full events[0] with source_event_id \"orders-health:cycle-42:opened:1:<n>\" for n = 0..500",
     "body": null
   },
   "response": {

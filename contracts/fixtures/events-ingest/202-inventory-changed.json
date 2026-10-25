@@ -1,5 +1,6 @@
 {
   "description": "One factual inventory change (OS build) observed between two complete snapshots (AG-FR-COLLECT-009).",
+  "preconditions": [],
   "request": {
     "method": "POST",
     "path": "/api/v1/events:ingest",

@@ -1,5 +1,8 @@
 {
   "description": "Recovery of the condition opened in 202-full.json. Same source_id, source_object_id, event_type, condition_id and labels, so the platform closes the same alert cycle (GAP-AG-006). Sent as a separate batch with a new Idempotency-Key.",
+  "preconditions": [
+    "202-full"
+  ],
   "request": {
     "method": "POST",
     "path": "/api/v1/events:ingest",

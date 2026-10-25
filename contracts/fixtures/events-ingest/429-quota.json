@@ -1,19 +1,20 @@
 {
   "description": "Source quota exceeded. Nothing is accepted. Retry the same body with the same key after Retry-After.",
+  "preconditions": [],
   "request": {
     "method": "POST",
     "path": "/api/v1/events:ingest",
     "headers": {
       "Content-Type": "application/json",
-      "Idempotency-Key": "ag-batch-0b6f4f8e-3f0a-4d43-9a57-1b8f6a0d2c11",
-      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a11"
+      "Idempotency-Key": "ag-batch-af5b7c49-8e3a-4db2-9b6c-5a7d9e1f3b77",
+      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a16"
     },
     "body": {
       "schema_version": "1.0",
       "source_id": "6a79fd19-cdb1-4e2e-ae99-a9e8477d5001",
       "events": [
         {
-          "source_event_id": "orders-health:cycle-41:opened:1",
+          "source_event_id": "orders-health:cycle-44:opened:1",
           "timestamp": "2026-09-24T09:15:00Z",
           "event_type": "health_check.failed",
           "severity": "High",
