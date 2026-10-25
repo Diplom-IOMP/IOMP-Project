@@ -5,13 +5,14 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "gen": "openapi-typescript ../../../contracts/openapi/iomp-v1.yaml -o src/iomp-v1.ts",
+    "gen": "openapi-typescript ../../../contracts/openapi/iomp-v1.yaml -o src/iomp-v1.ts && node scripts/bundle-json.mjs",
     "typecheck": "pnpm gen && tsc --noEmit -p .",
     "build": "pnpm gen",
     "test": "echo \"no tests\""
   },
   "devDependencies": {
     "openapi-typescript": "^7.4.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "yaml": "^2.9.1"
   }
 }

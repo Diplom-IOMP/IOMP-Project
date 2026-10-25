@@ -3,3 +3,5 @@ dist/
 coverage/
 *.tsbuildinfo
 packages/api-types/src/iomp-v1.ts
+packages/api-types/src/iomp-v1.json
+packages/api-types/src/event-types.json

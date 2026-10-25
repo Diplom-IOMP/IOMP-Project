@@ -5,12 +5,16 @@ on:
     paths:
       - 'platform/**'
       - 'contracts/openapi/**'
+      - 'contracts/fixtures/**'
+      - 'contracts/event-types.yaml'
       - '.github/workflows/platform.yml'
   push:
     branches: [main]
     paths:
       - 'platform/**'
       - 'contracts/openapi/**'
+      - 'contracts/fixtures/**'
+      - 'contracts/event-types.yaml'
       - '.github/workflows/platform.yml'
 
 permissions:
@@ -19,6 +23,23 @@ permissions:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: iomp
+          POSTGRES_PASSWORD: iomp
+          POSTGRES_DB: iomp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U iomp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Throwaway CI database, not a secret.
+      DATABASE_URL: postgres://iomp:iomp@localhost:5432/iomp_test
     defaults:
       run:
         working-directory: platform
