@@ -1,0 +1,14 @@
+# Default: both owners
+*                                 @mutednew @Rewer2022
+
+/agent/                           @Rewer2022
+/docs/agent/                      @Rewer2022
+/.github/workflows/agent.yml      @Rewer2022
+
+/platform/                        @mutednew
+/docs/platform/                   @mutednew
+/.github/workflows/platform.yml   @mutednew
+
+/contracts/                       @mutednew @Rewer2022
+/contracts/openapi/               @mutednew
+/contracts/event-types.yaml       @Rewer2022 @mutednew
