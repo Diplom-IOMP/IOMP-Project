@@ -1,0 +1,55 @@
+{
+  "description": "Agent heartbeat. Updates source freshness only, never opens an alert (GAP-AG-005).",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/events:ingest",
+    "headers": {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "ag-batch-3f8a2c61-9d4e-4b07-8a1c-5e6f7a8b9c33",
+      "X-Correlation-ID": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c33"
+    },
+    "body": {
+      "schema_version": "1.0",
+      "source_id": "6a79fd19-cdb1-4e2e-ae99-a9e8477d5001",
+      "events": [
+        {
+          "source_event_id": "4d2f8e1a-7b3c-4e5f-9a0b-c1d2e3f4a5b6:1:heartbeat:1440",
+          "timestamp": "2026-09-24T09:20:00Z",
+          "event_type": "agent.heartbeat",
+          "severity": "Info",
+          "status": "Unknown",
+          "source_object_id": "host-8f3a2c1d9e7b",
+          "title": "Agent heartbeat",
+          "message": "Agent running, all collectors healthy",
+          "labels": {
+            "agent.version": "0.1.0",
+            "agent.profile": "node",
+            "agent.os": "linux",
+            "agent.spool_used_ratio": "0.02",
+            "agent.oldest_pending_seconds": "0"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 202,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "receipt_id": "5c1e7f3b-9d2a-4b4a-a8f6-1a3b0d4e7f33",
+      "accepted_count": 1,
+      "rejected_count": 0,
+      "items": [
+        {
+          "index": 0,
+          "source_event_id": "4d2f8e1a-7b3c-4e5f-9a0b-c1d2e3f4a5b6:1:heartbeat:1440",
+          "event_id": "0d4f6a8b-2c3e-4d7f-9a1b-3c5e7a9b1d33",
+          "status": "Accepted"
+        }
+      ],
+      "ingestion_timestamp": "2026-09-24T09:20:00.102Z"
+    }
+  }
+}

@@ -1,0 +1,112 @@
+# Event types the IOMP Agent sends through POST /api/v1/events:ingest.
+# Owner: @Rewer2022 (agent). Changes need approval from @mutednew (platform).
+# Answers the agent part of GAP-AG-005 and GAP-AG-006 (docs/adr/ADR-CT-001-agent-integration-gaps.md).
+#
+# Rules for every type:
+# - event_type must match the openapi pattern and be listed here; anything else is
+#   rejected per item with UNKNOWN_EVENT_TYPE.
+# - Opening and recovery of one condition use the SAME event_type and condition_id;
+#   only status (Active/Cleared), source_event_id, timestamp, title and message change.
+#   There is no "*.recovered" type (agent spec 8.1).
+# - fingerprint_labels lists the only labels that take part in the platform fingerprint.
+#   Every other label is informational and never changes the fingerprint.
+# - Metrics, logs and traces never use these types; they go through OTLP (otlp-profile.yaml).
+
+registry_version: 0.1.0
+
+types:
+  agent.heartbeat:
+    description: >-
+      Liveness of one agent instance. The platform uses it only to update the data source
+      freshness (Fresh/Stale/Unavailable) and never opens an alert (ADR-CT-001, GAP-AG-005).
+    spec: [AG-FR-DELIVERY, GAP-AG-005, AG-TEST-043]
+    opens_alert: false
+    severity: [Info]
+    status: [Unknown]
+    condition_id: forbidden
+    source_object_id: stable host identity of the agent (not an IP address or a hostname that can change)
+    source_event_id: "<agent_id>:<epoch>:heartbeat:<sequence>"
+    interval_seconds: 60          # platform marks the source Stale after 3 missed intervals
+    labels:
+      required:
+        agent.version: agent build version, e.g. "0.1.0"
+        agent.profile: '"node" or "gateway"'
+        agent.os: '"linux" or "windows"'
+      optional:
+        agent.spool_used_ratio: string decimal in [0,1], e.g. "0.12"
+        agent.oldest_pending_seconds: string integer, age of the oldest undelivered record
+    fingerprint_labels: []
+    message: short masked summary; never secrets, user lists or full configuration
+
+  health_check.failed:
+    description: >-
+      A health condition evaluated by the agent: HTTP(S), TCP, DNS, TLS certificate and
+      allowlisted OS service probes. Opening after 3 consecutive failures, recovery after
+      3 consecutive successes (platform FR-INGEST-006, agent AG-FR-COLLECT-007).
+    spec: [AG-FR-COLLECT-007, GAP-AG-006, AG-TEST-012]
+    opens_alert: true
+    severity: [Critical, High, Medium, Low]   # from the probe policy; recovery repeats the opening severity
+    status: [Active, Cleared]
+    condition_id: >-
+      required; stable policy ID of the probe, e.g. "orders-readiness". A material policy
+      change creates a new condition_id only after the old one is retired with a Cleared event.
+    source_object_id: stable external ID of the checked resource, e.g. "orders-prod-01"
+    source_event_id: "<condition_id>:cycle-<n>:<opened|cleared>:<sequence>"
+    labels:
+      required: {}
+      optional:
+        check.kind: '"http", "tcp", "dns", "tls" or "service"'
+        environment: e.g. "production"
+        service: business service name, e.g. "orders"
+        check.target: sanitized target (host:port or URL without credentials and query)
+    fingerprint_labels: []
+    stable_labels: >-
+      The recovery event repeats the opening event's labels exactly, so the alert history
+      stays consistent even though labels are not part of the fingerprint.
+    evaluation_owner: agent   # the platform must not evaluate the same condition from samples
+
+  metric_threshold.exceeded:
+    description: >-
+      A threshold condition the agent evaluates on its own local metrics, for example free
+      disk space or memory. Only for conditions whose evaluation owner in the collector
+      manifest is "agent"; when the owner is "platform" the agent sends samples over OTLP
+      and does not emit this type (agent spec 4.2, one owner per condition).
+    spec: [AG-FR-COLLECT-001, AG-FR-COLLECT-002, GAP-AG-006]
+    opens_alert: true
+    severity: [Critical, High, Medium, Low]   # from the threshold policy; recovery repeats the opening severity
+    status: [Active, Cleared]
+    condition_id: required; stable threshold policy ID, e.g. "disk-free-root"
+    source_object_id: stable external ID of the measured resource, e.g. "orders-prod-01"
+    source_event_id: "<condition_id>:cycle-<n>:<opened|cleared>:<sequence>"
+    labels:
+      required: {}
+      optional:
+        environment: e.g. "production"
+        service: business service name, e.g. "orders"
+        metric.name: OTLP metric name the threshold is evaluated on
+    fingerprint_labels: []
+    stable_labels: The recovery event repeats the opening event's labels exactly.
+    evaluation_owner: agent
+
+  inventory.changed:
+    description: >-
+      One factual change between two complete inventory snapshots of the host: OS build,
+      hardware, disks, interfaces, allowlisted packages or services. A failed or partial scan
+      never produces a deletion (AG-FR-COLLECT-009). The CI itself is updated separately
+      through PATCH /api/v1/cis/{id}; this event is the change history.
+    spec: [AG-FR-COLLECT-009, AG-TEST-014]
+    opens_alert: false
+    severity: [Info]
+    status: [Unknown]
+    condition_id: forbidden
+    source_object_id: stable external ID of the changed resource (the host or its component)
+    source_event_id: "<source_object_id>:change:<new_snapshot_hash>:<attribute>"
+    labels:
+      required:
+        change.attribute: dotted attribute path, e.g. "os.build"
+        change.kind: '"added", "modified" or "removed"'
+      optional:
+        change.old_hash: hash of the previous sanitized value
+        change.new_hash: hash of the new sanitized value
+    fingerprint_labels: []
+    message: sanitized old and new values when they are not sensitive, otherwise only hashes

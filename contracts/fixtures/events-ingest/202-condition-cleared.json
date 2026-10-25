@@ -1,0 +1,53 @@
+{
+  "description": "Recovery of the condition opened in 202-full.json. Same source_id, source_object_id, event_type, condition_id and labels, so the platform closes the same alert cycle (GAP-AG-006). Sent as a separate batch with a new Idempotency-Key.",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/events:ingest",
+    "headers": {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "ag-batch-7c2e91d4-5b8a-4f61-a0e3-2d9c4b7f1e22",
+      "X-Correlation-ID": "8e4f6a10-2b3c-4d5e-9f80-1a2b3c4d5e22"
+    },
+    "body": {
+      "schema_version": "1.0",
+      "source_id": "6a79fd19-cdb1-4e2e-ae99-a9e8477d5001",
+      "events": [
+        {
+          "source_event_id": "orders-health:cycle-41:cleared:2",
+          "timestamp": "2026-09-24T09:18:00Z",
+          "event_type": "health_check.failed",
+          "severity": "High",
+          "status": "Cleared",
+          "source_object_id": "orders-prod-01",
+          "condition_id": "orders-readiness",
+          "title": "Service availability restored",
+          "message": "Three consecutive HTTPS checks succeeded",
+          "labels": {
+            "environment": "production",
+            "service": "orders"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 202,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "receipt_id": "4b0d6e2a-8c1f-4a39-b7e5-0f2a9c3d6e11",
+      "accepted_count": 1,
+      "rejected_count": 0,
+      "items": [
+        {
+          "index": 0,
+          "source_event_id": "orders-health:cycle-41:cleared:2",
+          "event_id": "9c3e5f7a-1b2d-4c6e-8f0a-2b4d6f8a0c22",
+          "status": "Accepted"
+        }
+      ],
+      "ingestion_timestamp": "2026-09-24T09:18:00.187Z"
+    }
+  }
+}
