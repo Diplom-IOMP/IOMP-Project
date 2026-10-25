@@ -8,8 +8,15 @@ const generated = join(dirname(require.resolve('@iomp/api-types/package.json')),
 const openapi = JSON.parse(readFileSync(join(generated, 'iomp-v1.json'), 'utf8')) as {
   components: { schemas: Record<string, Record<string, unknown>> };
 };
+interface EventTypeRule {
+  severity?: string[];
+  status?: string[];
+  condition_id?: string;
+  labels?: { required?: Record<string, unknown> };
+  fingerprint_labels?: string[];
+}
 const registry = JSON.parse(readFileSync(join(generated, 'event-types.json'), 'utf8')) as {
-  types: Record<string, { fingerprint_labels?: string[] }>;
+  types: Record<string, EventTypeRule>;
 };
 
 const ajv = new Ajv2020({ allErrors: true, strict: false });
@@ -41,6 +48,43 @@ export function fieldOf(error: ErrorObject): string {
 
 export function eventTypeRegistered(eventType: string): boolean {
   return Object.hasOwn(registry.types, eventType);
+}
+
+export interface RuleViolation {
+  field: string;
+  detail: string;
+}
+
+// Per-type rules from contracts/event-types.yaml: allowed severity and status, whether
+// condition_id is required or forbidden, and the required labels.
+export function checkEventTypeRules(event: {
+  event_type: string;
+  severity: string;
+  status: string;
+  condition_id?: string;
+  labels: Record<string, string>;
+}): RuleViolation | undefined {
+  const rule = registry.types[event.event_type];
+  if (!rule) return undefined;
+  if (rule.severity && !rule.severity.includes(event.severity)) {
+    return { field: '/severity', detail: `${event.event_type} allows severity ${rule.severity.join(', ')}` };
+  }
+  if (rule.status && !rule.status.includes(event.status)) {
+    return { field: '/status', detail: `${event.event_type} allows status ${rule.status.join(', ')}` };
+  }
+  const condition = rule.condition_id?.trim() ?? '';
+  if (condition === 'forbidden' && event.condition_id !== undefined) {
+    return { field: '/condition_id', detail: `${event.event_type} must not have condition_id` };
+  }
+  if (condition.startsWith('required') && !event.condition_id) {
+    return { field: '/condition_id', detail: `${event.event_type} requires condition_id` };
+  }
+  for (const label of Object.keys(rule.labels?.required ?? {})) {
+    if (!Object.hasOwn(event.labels, label)) {
+      return { field: `/labels/${label}`, detail: `${event.event_type} requires label ${label}` };
+    }
+  }
+  return undefined;
 }
 
 export function fingerprintLabels(eventType: string): string[] {
