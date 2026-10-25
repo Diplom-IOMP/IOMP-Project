@@ -1,13 +1,15 @@
 {
   "description": "The Idempotency-Key of 202-full is reused with a different body. Nothing is accepted. The client quarantines the request and does not retry with a new key.",
-  "precondition": "202-full was sent first with the same Idempotency-Key",
+  "preconditions": [
+    "202-full"
+  ],
   "request": {
     "method": "POST",
     "path": "/api/v1/events:ingest",
     "headers": {
       "Content-Type": "application/json",
       "Idempotency-Key": "ag-batch-0b6f4f8e-3f0a-4d43-9a57-1b8f6a0d2c11",
-      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a11"
+      "X-Correlation-ID": "5d1c2b7e-9a43-4f0e-b1d2-6c7a8e9f0a13"
     },
     "body": {
       "schema_version": "1.0",

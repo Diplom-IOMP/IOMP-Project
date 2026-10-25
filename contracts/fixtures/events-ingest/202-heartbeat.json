@@ -1,5 +1,6 @@
 {
   "description": "Agent heartbeat. Updates source freshness only, never opens an alert (GAP-AG-005).",
+  "preconditions": [],
   "request": {
     "method": "POST",
     "path": "/api/v1/events:ingest",

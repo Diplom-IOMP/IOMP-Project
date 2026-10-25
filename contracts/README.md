@@ -7,7 +7,7 @@ The single source of truth for everything the agent and the platform exchange. T
 | `openapi/iomp-v1.yaml` | Platform public API used by the agent: `POST /api/v1/events:ingest`, `GET/POST /api/v1/cis`, `PATCH /api/v1/cis/{id}`, `POST/PATCH /api/v1/topology/relationships` | @mutednew |
 | `otlp-profile.yaml` | OTLP/HTTP base URL, signal paths, auth | both |
 | `event-types.yaml` | Every `event_type` and `condition_id` the agent emits (affects platform fingerprints) | @Rewer2022 |
-| `fixtures/` | Golden agent requests and expected platform responses (full 202, partial 202, 409, 413, 422, 429) | both |
+| `fixtures/` | Golden agent requests and expected platform responses; format, preconditions and comparison rules in `fixtures/README.md` | both |
 | `CHANGELOG.md` | Contract history, newest first | both |
 
 ## Changing the contract

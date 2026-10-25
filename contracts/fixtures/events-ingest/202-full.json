@@ -1,5 +1,6 @@
 {
   "description": "All events accepted.",
+  "preconditions": [],
   "request": {
     "method": "POST",
     "path": "/api/v1/events:ingest",
