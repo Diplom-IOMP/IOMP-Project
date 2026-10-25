@@ -6,7 +6,8 @@
     "typecheck": "tsc --noEmit -p .",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "test": "tsc -p . && node --test --test-concurrency=1 \"dist/**/*.test.js\""
+    "test": "tsc -p . && node --test --test-concurrency=1 \"dist/**/*.test.js\"",
+    "admin": "node dist/cli/admin.js"
   },
   "dependencies": {
     "@iomp/api-types": "workspace:*",

@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import {
   type CanActivate,
   type ExecutionContext,
@@ -11,6 +11,7 @@ import type { FastifyRequest } from 'fastify';
 import { CLOCK, type Clock } from '../common/clock';
 import { ProblemError } from '../common/problem';
 import { Database } from '../db/database';
+import { hashSecret } from './api-keys';
 
 export interface Principal {
   serviceAccountId: string;
@@ -72,7 +73,7 @@ export class ApiKeyGuard implements CanActivate {
       [prefix, this.clock.now()],
     );
     const key = rows[0];
-    const digest = createHash('sha256').update(secret).digest();
+    const digest = hashSecret(secret);
     if (!key || !timingSafeEqual(digest, key.secret_sha256)) throw unauthenticated();
     return { serviceAccountId: key.service_account_id, permissions: key.permissions, sourceIds: key.source_ids };
   }
