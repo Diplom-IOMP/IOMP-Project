@@ -29,7 +29,7 @@ Rules:
 | `contract/<topic>` | contracts zone | required from the other owner |
 | `repo/<topic>` | shared zone | required from the other owner |
 
-1. One PR touches one zone, and the branch prefix names that zone. `zone-check` in `.github/workflows/contracts.yml` enforces this and the approval rule (after a review, `zone-recheck.yml` re-runs it): `contracts` and `shared` always need the other owner's approval, and so does a change to `agent` or `platform` made by someone other than its owner. The only exception to one zone per PR is a `repo/*` branch (repo-wide maintenance), which may touch every zone but always needs the other owner's approval.
+1. One PR touches one zone, and the branch prefix names that zone. `zone-check` in `.github/workflows/contracts.yml` enforces this and the approval rule (after a review, `zone-recheck.yml` re-runs it): `contracts` and `shared` always need the other owner's approval, and a change to `agent` or `platform` made by someone other than its owner needs that owner's approval. Only an owner's latest review counts, so a later "changes requested" withdraws an approval, and reviews from anyone else are ignored. The script always runs from the base branch, so a PR cannot change its own gate. The only exception to one zone per PR is a `repo/*` branch (repo-wide maintenance), which may touch every zone but always needs the other owner's approval.
 2. Squash merge only.
 3. Rebase your own branch on `main` daily and before opening a PR. Never rebase or push to someone else's branch.
 4. Several Claude Code sessions of one person use separate git worktrees and separate branches.
@@ -55,16 +55,7 @@ The plan lives in GitHub issues, not in chat or in either Claude's memory. Both 
 | Event types | `event-types.yaml` | Every agent `event_type` and `condition_id`, including `agent.heartbeat` and `health_check.failed` |
 | Golden data | `fixtures/` | Agent requests and platform responses: full 202, partial 202, 409, 413, 422, 429 |
 
-Open questions only the platform owner can close (agent spec 8.6), tracked as issues labelled `contract`:
-
-- GAP-AG-001: agent authentication (API key header or OAuth, audience, certificate-to-source binding)
-- GAP-AG-002: exact partial 202 schema and retry classes
-- GAP-AG-003: CI lookup and where the ETag comes from
-- GAP-AG-004: OTLP routes and auth
-- GAP-AG-005: `agent.heartbeat` payload through `events:ingest`
-- GAP-AG-006: stable fingerprint for opening and recovery
-- GAP-AG-007: default status of a new edge
-- GAP-AG-008: confirm that no fleet-management API is planned
+The agent integration gaps from agent spec 8.6 (GAP-AG-001..008: authentication, partial 202 and retry classes, CI lookup and ETag, OTLP routes, heartbeat, fingerprint, default edge status, no fleet-management API) are answered in `docs/adr/ADR-CT-001-agent-integration-gaps.md` (Accepted). New questions are issues labelled `contract`.
 
 ## Claude Code setup
 
