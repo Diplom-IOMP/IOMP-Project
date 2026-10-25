@@ -10,6 +10,7 @@ Spec: `docs/specs/technical-specification.md` (IDs `FR-*`, `NFR-*`, `TEST-*`, `A
 - `agent.heartbeat` updates source freshness only and never opens an alert. Opening and recovery of one condition share a fingerprint (`event_type` + `condition_id`, spec 4.4).
 - Never import from `agent/`. Generate DTOs from `contracts/openapi/` inside `platform/`.
 - Dependency manifests and lock files live under `platform/`, not the repo root.
-- Stack: ADR-PL-001 (NestJS/Fastify API and workers, PostgreSQL, React/Vite SPA, pnpm workspace). New infrastructure gets its own ADR first.
+- Stack: ADR-PL-001 (NestJS/Fastify API and workers, PostgreSQL, React/Vite SPA, pnpm workspace); database access, migrations and ingest persistence: ADR-PL-002. New infrastructure gets its own ADR first.
+- Database tests need `DATABASE_URL` (PostgreSQL 16); without it they are skipped locally, CI always runs them. Migrations live in `apps/api/src/db/migrations.ts`; never edit an applied one.
 - Commands, from `platform/`: `pnpm install`, `pnpm gen:api-types` (after any contract change), `pnpm typecheck`, `pnpm build`, `pnpm test`. Dev: `pnpm --filter @iomp/api build && pnpm --filter @iomp/api start`, `pnpm --filter @iomp/web dev`.
 - Public API types come only from `@iomp/api-types` (generated, git-ignored). Never hand-write DTOs for `/api/v1`.
