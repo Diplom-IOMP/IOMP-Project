@@ -1,0 +1,19 @@
+# Shared ignores only. Build output belongs in agent/.gitignore or platform/.gitignore.
+
+# Personal Claude Code files
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
