@@ -1,0 +1,38 @@
+name: platform
+
+on:
+  pull_request:
+    paths:
+      - 'platform/**'
+      - 'contracts/openapi/**'
+      - '.github/workflows/platform.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'platform/**'
+      - 'contracts/openapi/**'
+      - '.github/workflows/platform.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: platform/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: platform/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test

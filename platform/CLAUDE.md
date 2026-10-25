@@ -10,4 +10,6 @@ Spec: `docs/specs/technical-specification.md` (IDs `FR-*`, `NFR-*`, `TEST-*`, `A
 - `agent.heartbeat` updates source freshness only and never opens an alert. Opening and recovery of one condition share a fingerprint (`event_type` + `condition_id`, spec 4.4).
 - Never import from `agent/`. Generate DTOs from `contracts/openapi/` inside `platform/`.
 - Dependency manifests and lock files live under `platform/`, not the repo root.
-- Build and test commands: TODO after ADR-PL-001 (stack).
+- Stack: ADR-PL-001 (NestJS/Fastify API and workers, PostgreSQL, React/Vite SPA, pnpm workspace). New infrastructure gets its own ADR first.
+- Commands, from `platform/`: `pnpm install`, `pnpm gen:api-types` (after any contract change), `pnpm typecheck`, `pnpm build`, `pnpm test`. Dev: `pnpm --filter @iomp/api build && pnpm --filter @iomp/api start`, `pnpm --filter @iomp/web dev`.
+- Public API types come only from `@iomp/api-types` (generated, git-ignored). Never hand-write DTOs for `/api/v1`.
