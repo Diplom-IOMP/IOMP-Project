@@ -1,0 +1,54 @@
+{
+  "description": "One factual inventory change (OS build) observed between two complete snapshots (AG-FR-COLLECT-009).",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/events:ingest",
+    "headers": {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "ag-batch-6b9d4e72-1a5f-4c8e-b3d2-7f0a1b2c3d44",
+      "X-Correlation-ID": "3b4c5d6e-7f80-4a9b-8c1d-2e3f4a5b6c44"
+    },
+    "body": {
+      "schema_version": "1.0",
+      "source_id": "6a79fd19-cdb1-4e2e-ae99-a9e8477d5001",
+      "events": [
+        {
+          "source_event_id": "host-8f3a2c1d9e7b:change:9f2c6a1e:os.build",
+          "timestamp": "2026-09-24T10:02:00Z",
+          "event_type": "inventory.changed",
+          "severity": "Info",
+          "status": "Unknown",
+          "source_object_id": "host-8f3a2c1d9e7b",
+          "title": "OS build changed",
+          "message": "os.build: 24.04.1 -> 24.04.2",
+          "labels": {
+            "change.attribute": "os.build",
+            "change.kind": "modified",
+            "change.old_hash": "sha256:5e1a",
+            "change.new_hash": "sha256:9f2c"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 202,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "receipt_id": "6d2f8a4c-0e3b-4c5b-b9a7-2b4c1e5f8a44",
+      "accepted_count": 1,
+      "rejected_count": 0,
+      "items": [
+        {
+          "index": 0,
+          "source_event_id": "host-8f3a2c1d9e7b:change:9f2c6a1e:os.build",
+          "event_id": "1e5a7b9c-3d4f-4e8a-0b2c-4d6f8b0c2e44",
+          "status": "Accepted"
+        }
+      ],
+      "ingestion_timestamp": "2026-09-24T10:02:00.231Z"
+    }
+  }
+}
