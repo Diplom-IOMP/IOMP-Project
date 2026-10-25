@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Fails a PR that mixes ownership zones, or that changes shared files
-# (contracts/, repo root, docs/specs/, shared CI) without approval from someone other than the author.
-# repo/* branches (repo-wide maintenance, e.g. the bootstrap) may touch every zone,
-# but always need that approval.
+# Fails a PR that:
+# - uses a branch prefix that does not match the zone it changes,
+# - mixes ownership zones (repo/* branches excepted),
+# - changes contracts/ or shared files, or the other owner's zone,
+#   without approval from someone other than the author.
 set -euo pipefail
 
 repo="$GITHUB_REPOSITORY"
@@ -10,7 +11,8 @@ pr="$PR_NUMBER"
 author="$PR_AUTHOR"
 head_ref="${PR_HEAD_REF:-}"
 
-files=$(gh api --paginate "repos/$repo/pulls/$pr/files" --jq '.[].filename')
+agent_owner=Rewer2022
+platform_owner=mutednew
 
 zone_of() {
   case "$1" in
@@ -21,21 +23,39 @@ zone_of() {
   esac
 }
 
-zones=$(for f in $files; do zone_of "$f"; done | sort -u)
+zones=$(gh api --paginate "repos/$repo/pulls/$pr/files" --jq '.[].filename' |
+  while IFS= read -r f; do zone_of "$f"; done | sort -u)
 echo "Zones touched:"; echo "$zones"
 
-if [[ "$head_ref" == repo/* ]]; then
+case "$head_ref" in
+  agent/*)    want=agent ;;
+  platform/*) want=platform ;;
+  contract/*) want=contracts ;;
+  repo/*)     want=any ;;
+  *)
+    echo "::error::Branch '$head_ref' must start with agent/, platform/, contract/ or repo/."
+    exit 1 ;;
+esac
+
+if [ "$want" = any ]; then
   zones=shared
-elif [ "$(echo "$zones" | grep -c .)" -gt 1 ]; then
-  echo "::error::This PR touches more than one zone ($(echo $zones)). Split it: one PR per zone."
+elif [ "$zones" != "$want" ]; then
+  echo "::error::Branch '$head_ref' may only change the $want zone, but touches: $(echo $zones)."
   exit 1
 fi
 
-if [ "$zones" = "contracts" ] || [ "$zones" = "shared" ]; then
+needs_approval=false
+case "$zones" in
+  contracts|shared) needs_approval=true ;;
+  agent)    [ "$author" = "$agent_owner" ] || needs_approval=true ;;
+  platform) [ "$author" = "$platform_owner" ] || needs_approval=true ;;
+esac
+
+if [ "$needs_approval" = true ]; then
   approvers=$(gh api --paginate "repos/$repo/pulls/$pr/reviews" \
     --jq "[.[] | select(.state == \"APPROVED\" and .user.login != \"$author\")] | length")
   if [ "$approvers" -lt 1 ]; then
-    echo "::error::Changes to $zones need approval from the other owner."
+    echo "::error::Changes to the $zones zone by $author need approval from the other owner."
     exit 1
   fi
 fi

@@ -16,3 +16,4 @@ Full rules: `docs/collaboration.md`. The short version:
 6. `docs/specs/` is read-only. No secrets anywhere: the repository is public.
 7. One PR touches one zone. Before opening a PR: `git fetch origin main && git rebase origin/main`.
 8. Everything committed is in English (code, comments, docs, commit messages, PRs). Specs stay in Ukrainian.
+9. The plan is GitHub issues. Work only on open issues assigned to your owner; start a session with `gh issue list --assignee @me --state open`. Every PR says `Closes #N`. Questions to the other side are issues assigned to them, not guesses in code.

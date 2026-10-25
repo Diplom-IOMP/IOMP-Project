@@ -29,11 +29,21 @@ Rules:
 | `contract/<topic>` | contracts zone | required from the other owner |
 | `repo/<topic>` | shared zone | required from the other owner |
 
-1. One PR touches one zone. `zone-check` in `.github/workflows/contracts.yml` enforces this and the approval rule. The only exception is a `repo/*` branch (repo-wide maintenance), which may touch every zone but always needs the other owner's approval.
+1. One PR touches one zone, and the branch prefix names that zone. `zone-check` in `.github/workflows/contracts.yml` enforces this and the approval rule: `contracts` and `shared` always need the other owner's approval, and so does a change to `agent` or `platform` made by someone other than its owner. The only exception to one zone per PR is a `repo/*` branch (repo-wide maintenance), which may touch every zone but always needs the other owner's approval.
 2. Squash merge only.
 3. Rebase your own branch on `main` daily and before opening a PR. Never rebase or push to someone else's branch.
 4. Several Claude Code sessions of one person use separate git worktrees and separate branches.
 5. `main` is protected (owner sets it in Settings > Rules): PR required, `zone-check` required, no force pushes, no deletions.
+
+## Plan and who owns what
+
+The plan lives in GitHub issues, not in chat or in either Claude's memory. Both Claude Code sessions read it the same way.
+
+- Every task is an issue with one zone label (`agent`, `platform`, `contract`, `repo`) and an assignee. The assignee is the only one who works on it; nobody starts an issue assigned to the other person.
+- A question for the other side is an issue labelled `question` (or `contract` if the answer changes the contract), assigned to whoever must answer. Do not guess the answer in code; continue with what the contract already says.
+- Every PR names its issue (`Closes #N`). Work without an issue gets an issue first.
+- At the start of a session, Claude runs `gh issue list --assignee @me --state open` and `gh issue list --label contract --state open`, and picks work only from there.
+- When a decision is made, it goes into the issue or an ADR, never only into a chat.
 
 ## Contract
 
