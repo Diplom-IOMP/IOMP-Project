@@ -34,6 +34,7 @@ Rules:
 3. Rebase your own branch on `main` daily and before opening a PR. Never rebase or push to someone else's branch.
 4. Several Claude Code sessions of one person use separate git worktrees and separate branches.
 5. `main` is protected (owner sets it in Settings > Rules): PR required, `zone-check` required, no force pushes, no deletions.
+   Contract checks in the same workflow: `openapi-lint` (Redocly), `openapi-breaking` (`oasdiff breaking` against the base branch, because v1 is additive only) and `fixtures` (every fixture matches the OpenAPI schemas, `event-types.yaml` and `contracts/fixtures/README.md`).
 
 ## Plan and who owns what
 
