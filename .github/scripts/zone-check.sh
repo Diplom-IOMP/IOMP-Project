@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Fails a PR that mixes ownership zones, or that changes shared files
 # (contracts/, repo root, docs/specs/, shared CI) without approval from someone other than the author.
+# repo/* branches (repo-wide maintenance, e.g. the bootstrap) may touch every zone,
+# but always need that approval.
 set -euo pipefail
 
 repo="$GITHUB_REPOSITORY"
 pr="$PR_NUMBER"
 author="$PR_AUTHOR"
+head_ref="${PR_HEAD_REF:-}"
 
 files=$(gh api --paginate "repos/$repo/pulls/$pr/files" --jq '.[].filename')
 
@@ -21,7 +24,9 @@ zone_of() {
 zones=$(for f in $files; do zone_of "$f"; done | sort -u)
 echo "Zones touched:"; echo "$zones"
 
-if [ "$(echo "$zones" | grep -c .)" -gt 1 ]; then
+if [[ "$head_ref" == repo/* ]]; then
+  zones=shared
+elif [ "$(echo "$zones" | grep -c .)" -gt 1 ]; then
   echo "::error::This PR touches more than one zone ($(echo $zones)). Split it: one PR per zone."
   exit 1
 fi
