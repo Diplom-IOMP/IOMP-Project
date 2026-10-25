@@ -92,6 +92,42 @@ describe('events:ingest', { skip: databaseUrl ? false : 'DATABASE_URL is not set
     assert.deepEqual(items[1]!.error.code, 'UNKNOWN_EVENT_TYPE');
   });
 
+  test('per-type rules from event-types.yaml reject the item', async () => {
+    const heartbeat = {
+      source_event_id: 'hb',
+      timestamp: event.timestamp,
+      event_type: 'agent.heartbeat',
+      severity: 'Info',
+      status: 'Unknown',
+      title: 'Agent heartbeat',
+      message: '',
+      labels: { 'agent.version': '0.1.0', 'agent.profile': 'node', 'agent.os': 'linux' },
+    };
+    const res = await post({
+      ...body,
+      events: [
+        heartbeat,
+        { ...heartbeat, source_event_id: 'a', severity: 'High' },
+        { ...heartbeat, source_event_id: 'b', condition_id: 'x' },
+        { ...heartbeat, source_event_id: 'c', labels: { 'agent.version': '0.1.0' } },
+        { ...event, source_event_id: 'd', condition_id: undefined },
+        { ...event, source_event_id: 'e', status: 'Unknown' },
+      ],
+    });
+    const items = (res.json() as { items: { status: string; error?: { code: string; field: string } }[] }).items;
+    assert.equal(items[0]!.status, 'Accepted');
+    assert.deepEqual(
+      items.slice(1).map((item) => [item.error?.code, item.error?.field]),
+      [
+        ['INVALID_FIELD', '/severity'],
+        ['INVALID_FIELD', '/condition_id'],
+        ['INVALID_FIELD', '/labels/agent.profile'],
+        ['INVALID_FIELD', '/condition_id'],
+        ['INVALID_FIELD', '/status'],
+      ],
+    );
+  });
+
   test('missing or wrong API key is 401', async () => {
     assert.equal((await post(body, { 'X-API-Key': '' })).statusCode, 401);
     const wrong = await post(body, { 'X-API-Key': 'iomp_fixture_wrong' });

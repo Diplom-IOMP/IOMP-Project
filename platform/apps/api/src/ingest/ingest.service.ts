@@ -7,6 +7,7 @@ import { CLOCK, type Clock } from '../common/clock';
 import { INVALID_JSON } from '../common/http';
 import { ProblemError, schemaValidationFailed } from '../common/problem';
 import {
+  checkEventTypeRules,
   eventTypeRegistered,
   fieldOf,
   validateIngestEnvelope,
@@ -253,6 +254,10 @@ export class IngestService {
         field: '/event_type',
         detail: 'event_type is not registered in contracts/event-types.yaml',
       };
+    }
+    const violation = checkEventTypeRules(valid);
+    if (violation) {
+      return { code: 'INVALID_FIELD', retryable: false, field: violation.field, detail: violation.detail };
     }
     if (new Date(valid.timestamp).getTime() - now.getTime() > FUTURE_SKEW_MS) {
       return {
